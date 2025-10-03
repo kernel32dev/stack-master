@@ -28,6 +28,69 @@ pub(crate) unsafe extern "stdcall" fn dock<A, B>(
     a: *mut A,
 ) -> *mut B {
     naked_asm!(
+        "push ebp",
+
+        "mov eax, [esp+8]", // read `f`
+        "mov ecx, [esp+12]", // read `a`
+
+        "push ebx",
+        "push esi",
+        "push edi",
+
+        // --- install SEH registration record ---
+        // Push handler then push old chain; so memory at [esp] = Next (old FS), [esp+4] = Handler
+        "lea edx, {_except_handler_noop}", // Handler
+        "push edx",  // Handler
+        "push dword ptr fs:[0]",                  // Next (old chain head)
+        "mov dword ptr fs:[0], esp",             // Link new record into FS:[0]
+        // Now fs:[0] points to our EXCEPTION_REGISTRATION_RECORD on the stack.
+
+        // store the current esp into STACK_START (-8 to account for the argument and return address pushed by call)
+        "lea ebx, [esp-8]",
+        "mov [{stack_start}], ebx",
+
+        "push ecx", // push the argument `a` for `f`
+        "call eax", // call `f`
+
+        // --- normal return path: restore chain and registers ---
+        // Note: we must unlink our SEH record before popping the callee-saved regs
+        // so the stack unwinding/cleaning remains well-formed.
+        // Unlink SEH record:
+        // note that we cannot use eax as that is storing the result of the call above
+        "mov ecx, dword ptr fs:[0]", // ecx = address of our EXCEPTION_REGISTRATION_RECORD
+        "mov ecx, [ecx]", // [ecx] = (the previous fs:[0] value)
+        "mov dword ptr fs:[0], ecx", // restore previous chain head
+
+        // pop the registration record off the stack (handler + oldFS)
+        "add esp, 8", // discard the two dwords we pushed for the record
+
+        "pop edi",
+        "pop esi",
+        "pop ebx",
+
+        "pop ebp",
+        "ret 8",
+        stack_start = sym STACK_START,
+        _except_handler_noop = sym _except_handler_noop,
+    )
+}
+
+#[unsafe(naked)]
+pub(crate) unsafe extern "stdcall" fn _except_handler_noop() -> usize {
+    naked_asm!(
+        "xor eax, eax",
+        "ret",
+    )
+}
+
+// old version
+#[cfg(any())]
+#[unsafe(naked)]
+pub(crate) unsafe extern "stdcall" fn dock<A, B>(
+    f: unsafe extern "stdcall" fn(*mut A) -> *mut B,
+    a: *mut A,
+) -> *mut B {
+    naked_asm!(
         "pop eax", // pop the return address
         "pop edx", // pop the function `f`
         "pop ecx", // pop the argument `a`

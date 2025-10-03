@@ -1,5 +1,5 @@
 //! ```sh
-//! cargo test --target i686-pc-windows-msvc -- --nocapture  --test-threads 1
+//! cargo test -p stack-master --target i686-pc-windows-msvc -- --nocapture  --test-threads 1
 //! ```
 #![allow(static_mut_refs)]
 use super::*;
@@ -51,23 +51,37 @@ fn suspend_and_resume_complex() {
             let _ = tx.send(Stack::from_entry(move || {
                 println!("started A");
                 Stack::suspend(move |c| {
-                    println!("suspended A");
+                    println!("suspended A: 1");
                     let _ = tx.send(c);
-                    println!("sent A");
+                    println!("sent A: 1");
                     pump()
                 });
-                println!("resumed A");
+                println!("resumed A: 1");
+                Stack::suspend(move |c| {
+                    println!("suspended A: 2");
+                    let _ = tx.send(c);
+                    println!("sent A: 2");
+                    pump()
+                });
+                println!("resumed A: 2");
                 pump()
             }));
             let _ = tx.send(Stack::from_entry(move || {
                 println!("started B");
                 Stack::suspend(move |c| {
-                    println!("suspended B");
+                    println!("suspended B: 1");
                     let _ = tx.send(c);
-                    println!("sent B");
+                    println!("sent B: 1");
                     pump()
                 });
-                println!("resumed B");
+                println!("resumed B: 1");
+                Stack::suspend(move |c| {
+                    println!("suspended B: 2");
+                    let _ = tx.send(c);
+                    println!("sent B: 2");
+                    pump()
+                });
+                println!("resumed B: 2");
                 pump()
             }));
             pump()

@@ -82,6 +82,7 @@ impl Stack {
     /// it is undefined behaviour to:
     /// - call this function outside a call to [`Stack::dock`]
     /// - for f to unwind
+    /// - call this function in the callback of another call to suspend
     pub unsafe fn suspend<F>(f: F)
     where
         F: FnOnce(Stack) -> std::convert::Infallible + 'static,
